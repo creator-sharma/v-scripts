@@ -322,7 +322,7 @@ if ($Download) {
       if ($LASTEXITCODE -ne 0) {
         Write-Host "(missing) $remote" -ForegroundColor DarkYellow
       } else {
-        Write-Host "OK: $(Split-Path $remote -Leaf)"
+        Write-Host "OK: $(Split-Path $remote -Leaf)" -ForegroundColor Green
       }
     }
 
@@ -362,7 +362,7 @@ if ($Download) {
       Add-Type -AssemblyName System.IO.Compression.FileSystem
       $zipPath = Join-Path $LocalDir ("logs_$stamp.zip")
       [System.IO.Compression.ZipFile]::CreateFromDirectory($dest,$zipPath)
-      Write-Host "ZIP -> $zipPath"
+      Write-Host "ZIP -> $zipPath" -ForegroundColor Green
     }
 
   } catch {

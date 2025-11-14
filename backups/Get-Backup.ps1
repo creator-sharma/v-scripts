@@ -48,21 +48,21 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-Write-Host "Checking for latest backup on $Server ..."
+Write-Host "Checking for latest backup on $Server ..." -ForegroundColor Cyan
 
 # Get latest file path on the server
 $sshCmd = "ls -1t $RemoteDir/*.sql.gz | head -n 1"
 $latest = & ssh -p $Port $Server $sshCmd 2>$null
 
 if (-not $latest) {
-    Write-Host "No backup file found in $RemoteDir"
+    Write-Host "No backup file found in $RemoteDir" -ForegroundColor Yellow
     exit 1
 }
 
 $latest   = $latest.Trim()
 $filename = Split-Path $latest -Leaf
 
-Write-Host "Downloading $filename ..."
+Write-Host "Downloading $filename ..." -ForegroundColor Cyan
 
 # Ensure local folder exists
 if (!(Test-Path -LiteralPath $LocalDir)) {
@@ -73,22 +73,22 @@ if (!(Test-Path -LiteralPath $LocalDir)) {
 $remoteArg = "{0}:{1}" -f $Server, $latest
 & scp -P $Port -p -q $remoteArg $LocalDir
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "Download failed."
+    Write-Host "Download failed." -ForegroundColor Red
     exit 2
 }
 
 $localPath = Join-Path $LocalDir $filename
-Write-Host "Download complete -> $localPath"
+Write-Host "Download complete -> $localPath" -ForegroundColor Green
 
 # Write SHA-256 checksum next to the file
 try {
     $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $localPath).Hash
     $hashFile = "$localPath.sha256"
     $hash | Out-File -LiteralPath $hashFile -Encoding ascii -NoNewline
-    Write-Host "SHA256: $hash"
-    Write-Host "Wrote checksum -> $hashFile"
+    Write-Host "SHA256: $hash" -ForegroundColor DarkCyan
+    Write-Host "Wrote checksum -> $hashFile" -ForegroundColor Green
 } catch {
-    Write-Host "WARNING: Failed to compute/write SHA256: $($_.Exception.Message)"
+    Write-Host "WARNING: Failed to compute/write SHA256: $($_.Exception.Message)" -ForegroundColor Yellow
 }
 
 # Optional gzip integrity check (quick probe)
@@ -99,13 +99,13 @@ if ($TestGzip) {
             $gz  = New-Object System.IO.Compression.GZipStream($fs, [System.IO.Compression.CompressionMode]::Decompress)
             $buf = New-Object byte[] 2048
             [void]$gz.Read($buf, 0, $buf.Length)
-            Write-Host "Gzip quick-check: OK (stream opened & read)."
+            Write-Host "Gzip quick-check: OK (stream opened & read)." -ForegroundColor Green
         } finally {
             if ($gz) { $gz.Dispose() }
             if ($fs) { $fs.Dispose() }
         }
     } catch {
-        Write-Host "Gzip quick-check: FAILED → $($_.Exception.Message)"
+        Write-Host "Gzip quick-check: FAILED → $($_.Exception.Message)" -ForegroundColor Red
     }
 }
 
@@ -113,17 +113,17 @@ if ($TestGzip) {
 if ($Extract) {
     $sevenZip = "C:\Program Files\7-Zip\7z.exe"
     if (Test-Path $sevenZip) {
-        Write-Host "Extracting with 7-Zip..."
+        Write-Host "Extracting with 7-Zip..." -ForegroundColor Cyan
         # extract into LocalDir explicitly
         & $sevenZip e $localPath "-o$LocalDir" -aoa | Out-Null
         if ($LASTEXITCODE -eq 0) {
             $sqlName = ($filename -replace '\.gz$', '')
-            Write-Host "Extracted -> $(Join-Path $LocalDir $sqlName)"
+            Write-Host "Extracted -> $(Join-Path $LocalDir $sqlName)" -ForegroundColor Green
         } else {
-            Write-Host "Extraction failed (7-Zip exit $LASTEXITCODE)"
+            Write-Host "Extraction failed (7-Zip exit $LASTEXITCODE)" -ForegroundColor Red
         }
     } else {
-        Write-Host "7-Zip not found at '$sevenZip'. Skipping extraction."
+        Write-Host "7-Zip not found at '$sevenZip'. Skipping extraction." -ForegroundColor Yellow
     }
 }
 
@@ -137,14 +137,14 @@ if ($Keep -gt 0) {
         foreach ($f in $toDelete) {
             try {
                 Remove-Item -LiteralPath $f.FullName -Force
-                Write-Host "Removed old backup: $($f.Name)"
+                Write-Host "Removed old backup: $($f.Name)" -ForegroundColor DarkYellow
                 # Also remove any sidecar .sha256
                 $sidecar = "$($f.FullName).sha256"
                 if (Test-Path -LiteralPath $sidecar) {
                     Remove-Item -LiteralPath $sidecar -Force
                 }
             } catch {
-                Write-Host "Failed to delete $($f.Name): $($_.Exception.Message)"
+                Write-Host "Failed to delete $($f.Name): $($_.Exception.Message)" -ForegroundColor Yellow
             }
         }
     }

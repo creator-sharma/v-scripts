@@ -58,7 +58,7 @@ $files = Get-ChildItem -Path $LocalDir -Filter $Pattern -File -ErrorAction Silen
          Sort-Object LastWriteTime -Descending
 
 if (-not $files -or $files.Count -eq 0) {
-    Write-Host "No backup files found in $LocalDir matching '$Pattern'."
+    Write-Host "No backup files found in $LocalDir matching '$Pattern'." -ForegroundColor Yellow
     exit 6  # no file
 }
 
@@ -67,7 +67,7 @@ if (-not $All) {
     $files = $files | Select-Object -First 1
 }
 
-Write-Host "Found $($files.Count) backup file(s) to verify."
+Write-Host "Found $($files.Count) backup file(s) to verify." -ForegroundColor Cyan
 
 # Track overall status across all files
 $overallHadCreatedHash = $false
@@ -79,11 +79,11 @@ foreach ($file in $files) {
     $hashFile = "$path.sha256"
 
     Write-Host ""
-    Write-Host "=== Verifying: $path ==="
+    Write-Host "=== Verifying: $path ===" -ForegroundColor Cyan
 
     # 2) Compute SHA-256
     $computed = (Get-FileHash -Algorithm SHA256 -LiteralPath $path).Hash
-    Write-Host "Computed SHA256: $computed"
+    Write-Host "Computed SHA256: $computed" -ForegroundColor DarkCyan
 
     $statusForThisFile = 0
 
@@ -94,10 +94,10 @@ foreach ($file in $files) {
             -replace '(?s).*?([A-Fa-f0-9]{64}).*', '$1'
 
         if ($stored -and ($stored.ToUpperInvariant() -eq $computed.ToUpperInvariant())) {
-            Write-Host "OK: hash matches ($hashFile)."
+            Write-Host "OK: hash matches ($hashFile)." -ForegroundColor Green
             $statusForThisFile = 0
         } else {
-            Write-Host "ERROR: hash mismatch."
+            Write-Host "ERROR: hash mismatch." -ForegroundColor Red
             Write-Host "Stored : $stored"
             Write-Host "Computed: $computed"
             $statusForThisFile = 4   # mismatch
@@ -106,7 +106,7 @@ foreach ($file in $files) {
     } else {
         # Create a simple .sha256 with just the hex to keep it portable
         $computed | Out-File -LiteralPath $hashFile -Encoding ascii -NoNewline
-        Write-Host "NOTE: no .sha256 found. Wrote new file: $hashFile"
+        Write-Host "NOTE: no .sha256 found. Wrote new file: $hashFile" -ForegroundColor Yellow
         $statusForThisFile = 3       # missing hash (created)
         $overallHadCreatedHash = $true
     }
@@ -122,13 +122,13 @@ foreach ($file in $files) {
                 )
                 $buf = New-Object byte[] 2048
                 [void]$gz.Read($buf, 0, $buf.Length)  # attempt to read a bit
-                Write-Host "OK: gzip stream opened and read successfully."
+                Write-Host "OK: gzip stream opened and read successfully." -ForegroundColor Green
             } finally {
                 if ($gz) { $gz.Dispose() }
                 if ($fs) { $fs.Dispose() }
             }
         } catch {
-            Write-Host "ERROR: gzip integrity check failed: $($_.Exception.Message)"
+            Write-Host "ERROR: gzip integrity check failed: $($_.Exception.Message)" -ForegroundColor Red
             $overallHadGzipFail = $true
             # If this file was otherwise OK or just created hash, conceptually it's now "5"
             if ($statusForThisFile -eq 0 -or $statusForThisFile -eq 3) {
@@ -153,5 +153,5 @@ if ($overallHadMismatch) {
 }
 
 Write-Host ""
-Write-Host "Overall verification status: $finalStatus"
+Write-Host "Overall verification status: $finalStatus" -ForegroundColor Cyan
 exit $finalStatus
