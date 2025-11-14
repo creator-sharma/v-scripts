@@ -2,25 +2,33 @@
 #  Verify-Backup.ps1
 #  -----------------------------------------------------------------------------
 #  Verifies the latest local ApnaGold backup by:
-#    • computing SHA-256 and comparing with the sidecar .sha256 (or creating it if missing)
-#    • optional quick gzip integrity probe (-TestGzip)
+#      • computing SHA-256 and comparing to the stored .sha256 file
+#      • or generating a new .sha256 if missing
+#      • optional gzip integrity probe (-TestGzip)
 #
-#  EXAMPLES:
-#    PS C:\Work13> .\scripts\Verify-Backup.ps1
-#       → verifies latest backup in C:\Work13\backups
+#  USAGE EXAMPLES:
 #
-#    PS C:\Work13> .\scripts\Verify-Backup.ps1 -LocalDir "D:\SafeCopies"
-#       → verifies from another folder
+#    # Basic verification in default backup directory
+#    PS> .\Verify-Backup.ps1
 #
-#    PS C:\Work13> .\scripts\Verify-Backup.ps1 -TestGzip
-#       → also opens the gzip stream and reads a small chunk
+#    # Specify a different local backup directory
+#    PS> .\Verify-Backup.ps1 -LocalDir "D:\DB_Backups"
 #
-#    Exit codes:
-#       0 = OK (hash matched)
-#       3 = No .sha256 existed; script created it
-#       4 = Hash mismatch
-#       5 = Gzip probe failed
-#       6 = No matching backup file found
+#    # Verify using a different filename pattern
+#    PS> .\Verify-Backup.ps1 -Pattern "mydb_*.sql.gz"
+#
+#    # Verify + test gzip integrity
+#    PS> .\Verify-Backup.ps1 -TestGzip
+#
+#    # Example return codes:
+#         0  = OK (hash matched)
+#         3  = Hash file missing → created
+#         4  = Hash mismatch
+#         5  = Gzip test failed
+#         6  = No matching backup found
+#
+#  This script is ideal for **daily verification tasks**, CI pipelines,
+#  backup-monitoring alerts, or local validation after download.
 # =====================================================================================================
 
 param(
@@ -77,7 +85,7 @@ if ($TestGzip) {
     try {
         $fs = [System.IO.File]::OpenRead($path)
         try {
-            $gz  = New-Object System.IO.Compression.GzipStream($fs, [System.IO.Compression.CompressionMode]::Decompress)
+            $gz  = New-Object System.IO.Compression.GZipStream($fs, [System.IO.Compression.CompressionMode]::Decompress)
             $buf = New-Object byte[] 2048
             [void]$gz.Read($buf, 0, $buf.Length)  # attempt to read a bit
             Write-Host "OK: gzip stream opened and read successfully."

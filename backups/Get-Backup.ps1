@@ -2,26 +2,38 @@
 #  Get-Backup.ps1
 #  -----------------------------------------------------------------------------
 #  Downloads the most recent database backup (.sql.gz) from the VPS,
-#  saves it locally, writes a SHA-256 checksum, optionally extracts it, and prunes older local copies.
+#  stores it locally, writes a SHA-256 checksum, optionally extracts it using
+#  7-Zip, optionally performs a gzip integrity check, and prunes older local
+#  copies beyond a specified retention count.
+#
+#  USAGE EXAMPLES:
+#
+#    # Basic download of latest backup
+#    PS> .\Get-Backup.ps1
+#
+#    # Download + extract into the same folder
+#    PS> .\Get-Backup.ps1 -Extract
+#
+#    # Download + test gzip integrity
+#    PS> .\Get-Backup.ps1 -TestGzip
+#
+#    # Keep last 10 local backups, delete older ones
+#    PS> .\Get-Backup.ps1 -Keep 10
+#
+#    # Download from a different server
+#    PS> .\Get-Backup.ps1 -Server "backup-prod" -Port 2222
+#
+#    # Use custom local and remote paths
+#    PS> .\Get-Backup.ps1 -RemoteDir "/home/apna/backups/daily" `
+#                          -LocalDir "D:\DB_Backups"
+#
+#    # Combine features:
+#    PS> .\Get-Backup.ps1 -Extract -TestGzip -Keep 14
 #
 #  REQUIREMENTS:
-#    • ssh/scp available (Windows 10/11 built-in OpenSSH is fine)
-#    • Optional for -Extract: 7-Zip at "C:\Program Files\7-Zip\7z.exe"
-#
-#  EXAMPLES (run from PowerShell):
-#    PS C:\Work13> .\scripts\Get-Backup.ps1
-#       → downloads latest backup to C:\Work13\backups + writes .sha256
-#
-#    PS C:\Work13> .\scripts\Get-Backup.ps1 -Extract
-#       → download, write .sha256, then extract with 7-Zip
-#
-#    PS C:\Work13> .\scripts\Get-Backup.ps1 -Keep 10
-#       → keeps the last 10 local .sql.gz files
-#
-#    PS C:\Work13> .\scripts\Get-Backup.ps1 -TestGzip
-#       → additionally opens the gzip stream to quickly sanity-check integrity
-#
-#    PS C:\Work13> .\scripts\Get-Backup.ps1 -Server "apna-vps" -RemoteDir "/home/apna/backups/daily"
+#     - SSH/SCP installed (Windows OpenSSH is fine)
+#     - For extraction: optional 7-Zip installed at:
+#           C:\Program Files\7-Zip\7z.exe
 # =====================================================================================================
 
 param(
@@ -57,8 +69,9 @@ if (!(Test-Path -LiteralPath $LocalDir)) {
     New-Item -ItemType Directory -Force -Path $LocalDir | Out-Null
 }
 
-# Download
-& scp -P $Port -p -q "$($Server):$latest" "$LocalDir\"
+# Download (build remote arg safely)
+$remoteArg = "{0}:{1}" -f $Server, $latest
+& scp -P $Port -p -q $remoteArg $LocalDir
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Download failed."
     exit 2
@@ -83,7 +96,7 @@ if ($TestGzip) {
     try {
         $fs = [System.IO.File]::OpenRead($localPath)
         try {
-            $gz  = New-Object System.IO.Compression.GzipStream($fs, [System.IO.Compression.CompressionMode]::Decompress)
+            $gz  = New-Object System.IO.Compression.GZipStream($fs, [System.IO.Compression.CompressionMode]::Decompress)
             $buf = New-Object byte[] 2048
             [void]$gz.Read($buf, 0, $buf.Length)
             Write-Host "Gzip quick-check: OK (stream opened & read)."
@@ -101,7 +114,8 @@ if ($Extract) {
     $sevenZip = "C:\Program Files\7-Zip\7z.exe"
     if (Test-Path $sevenZip) {
         Write-Host "Extracting with 7-Zip..."
-        & $sevenZip e $localPath -aoa | Out-Null
+        # extract into LocalDir explicitly
+        & $sevenZip e $localPath "-o$LocalDir" -aoa | Out-Null
         if ($LASTEXITCODE -eq 0) {
             $sqlName = ($filename -replace '\.gz$', '')
             Write-Host "Extracted -> $(Join-Path $LocalDir $sqlName)"
