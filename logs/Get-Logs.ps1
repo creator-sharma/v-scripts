@@ -1,11 +1,4 @@
-<# ====================================================================================================
-   Get-Logs.ps1  — Improved Edition
-   - Cleaner SSH handling
-   - Unified sudo/journalctl logic
-   - Better rotated log discovery
-   - Safer escaping
-   - Clearer structure
-==================================================================================================== #>
+# logs\Get-Logs.ps1
 
 [CmdletBinding()]
 param(
@@ -16,7 +9,7 @@ param(
   [string]$RemoteLogDir  = "/srv/apnagold/logs",
 
   # Local
-  [string]$LocalDir      = "C:\Work13\logs",
+  [string]$LocalDir      = "C:\Work13\scripts\logs",
 
   # Scope
   [ValidateSet("All","Nginx","App","Backup","Journal")]
@@ -39,6 +32,10 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+# Global sudo state (prompt once per run)
+$script:SudoPasswordPlain = $null
+$script:SudoPasswordAsked = $false
 
 # =============================================================
 # Utility: Ensure directory exists
@@ -69,8 +66,8 @@ function Section([string]$title) {
 # Build SSH command safely
 # =============================================================
 function Invoke-SSH([string]$cmd) {
-  # Escape for bash
-  $escaped = $cmd.Replace("`"", "\\`"")
+  # Escape double-quotes for bash
+  $escaped = $cmd.Replace('"', '\"')
 
   $psi = New-Object System.Diagnostics.ProcessStartInfo
   $psi.FileName  = "ssh"
@@ -93,39 +90,46 @@ function Invoke-SSH([string]$cmd) {
 
 # =============================================================
 # SUDO wrapper — unified for journalctl or other commands
+#   - prompts once per run
+#   - reuses password for all sudo calls
 # =============================================================
 function Invoke-Sudo([string]$cmd, [string]$title) {
   Section $title
 
-  # 1) Try passwordless sudo
-  try {
-    $out = Invoke-SSH "sudo -n $cmd"
-    Write-Host $out
-    return
-  } catch { }
+  # Ask for password once per run
+  if (-not $script:SudoPasswordAsked) {
+    $pw = Read-Host "Sudo password (or Enter to skip sudo-protected logs)" -AsSecureString
+    $script:SudoPasswordAsked = $true
 
-  # 2) Prompt password
-  $pw = Read-Host "Password for sudo (or Enter to skip)" -AsSecureString
-  if (-not $pw.Length) {
-    Write-Host "(skipped: $title)" -ForegroundColor DarkYellow
+    if ($pw.Length -gt 0) {
+      $script:SudoPasswordPlain = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
+        [Runtime.InteropServices.Marshal]::SecureStringToBSTR($pw)
+      )
+    } else {
+      $script:SudoPasswordPlain = $null
+      Write-Host "(sudo logs disabled for this run)" -ForegroundColor DarkYellow
+      return
+    }
+  }
+
+  if (-not $script:SudoPasswordPlain) {
+    Write-Host "(sudo logs disabled for this run)" -ForegroundColor DarkYellow
     return
   }
 
-  $plain = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
-             [Runtime.InteropServices.Marshal]::SecureStringToBSTR($pw))
-
-  $escaped = $cmd.Replace("`"", "\\`"")
+  # Escape double-quotes for bash
+  $escaped = $cmd.Replace('"', '\"')
 
   $psi = New-Object System.Diagnostics.ProcessStartInfo
   $psi.FileName  = "ssh"
   $psi.Arguments = "-p $Port $Server `"sudo -S -p '' $escaped`""
-  $psi.UseShellExecute = $false
+  $psi.UseShellExecute        = $false
   $psi.RedirectStandardInput  = $true
   $psi.RedirectStandardOutput = $true
   $psi.RedirectStandardError  = $true
 
   $p = [System.Diagnostics.Process]::Start($psi)
-  $p.StandardInput.WriteLine($plain)
+  $p.StandardInput.WriteLine($script:SudoPasswordPlain)
   $p.StandardInput.Flush()
 
   $out = $p.StandardOutput.ReadToEnd()
@@ -183,9 +187,9 @@ if ($RemoteGlobs) {
 
 # Fallback to --Kinds
 if (-not $remoteFiles) {
-  if ($wantNginx) { $remoteFiles += $nginxLogs | % { Join-Unix $RemoteLogDir $_ } }
-  if ($wantApp)   { $remoteFiles += $appLogs   | % { Join-Unix $RemoteLogDir $_ } }
-  if ($wantBackup){ $remoteFiles += $backupLog | % { Join-Unix $RemoteLogDir $_ } }
+  if ($wantNginx) { $remoteFiles += $nginxLogs | ForEach-Object { Join-Unix $RemoteLogDir $_ } }
+  if ($wantApp)   { $remoteFiles += $appLogs   | ForEach-Object { Join-Unix $RemoteLogDir $_ } }
+  if ($wantBackup){ $remoteFiles += $backupLog | ForEach-Object { Join-Unix $RemoteLogDir $_ } }
 }
 
 # =============================================================
@@ -266,7 +270,7 @@ if ($Download) {
     }
 
     # Base files
-    $remoteFiles | Select-Object -Unique | % { Copy-One $_ }
+    $remoteFiles | Select-Object -Unique | ForEach-Object { Copy-One $_ }
 
     # Rotated?
     if ($IncludeRotated) {
@@ -287,7 +291,7 @@ if ($Download) {
         $glob = Join-Unix $RemoteLogDir $pat
         try {
           $list = Invoke-SSH "ls -1 $glob 2>/dev/null || true"
-          $list -split "`n" | ? { $_.Trim() } | % { Copy-One $_.Trim() }
+          $list -split "`n" | Where-Object { $_.Trim() } | ForEach-Object { Copy-One $_.Trim() }
         } catch { }
       }
     }

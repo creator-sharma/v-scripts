@@ -27,7 +27,7 @@
 param(
     [string]$Server    = "apna-vps",
     [string]$RemoteDir = "/home/apna/backups/daily",
-    [string]$LocalDir  = "C:\Work13\backups",
+    [string]$LocalDir  = "C:\Work13\scripts\backups\output",
     [int]$Port         = 22,
     [int]$Keep         = 5,          # keep last N local .sql.gz files; set 0 to disable
     [switch]$Extract,                # auto-extract with 7-Zip if available

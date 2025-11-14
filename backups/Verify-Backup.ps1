@@ -24,7 +24,7 @@
 # =====================================================================================================
 
 param(
-    [string]$LocalDir = "C:\Work13\backups",
+    [string]$LocalDir = "C:\Work13\scripts\backups\output",
     [string]$Pattern  = "apnagold_*.sql.gz",
     [switch]$TestGzip   # optional: quickly test gzip integrity
 )
