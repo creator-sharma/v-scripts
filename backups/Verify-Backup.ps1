@@ -1,33 +1,33 @@
 # =====================================================================================================
-#  Verify-Backup.ps1
-#  -----------------------------------------------------------------------------
-#  Verifies ApnaGold backups by:
-#      • computing SHA-256 and comparing to the stored .sha256 file
-#      • or generating a new .sha256 if missing
-#      • optional gzip integrity probe (-TestGzip)
+#  verify-backup.ps1
+#  ---------------------------------------------------------------------------------------------
+#  Verifies database backups by:
+#      • Computing SHA-256 and comparing to the stored .sha256
+#      • Creating .sha256 files if missing
+#      • Optional gzip integrity probe (-TestGzip)
 #
-#  By default, only the **latest** matching backup is verified.
-#  Use -All to verify **all** matching backups in the directory.
+#  By default: verifies ONLY the newest matching backup.
+#  Use -All to verify EVERY matching backup.
 #
 #  USAGE EXAMPLES:
 #
-#    # Basic verification of latest backup in default directory
-#    PS> .\Verify-Backup.ps1
+#    # Verify latest backup (default path)
+#    PS> .\backups\verify-backup.ps1
 #
-#    # Verify latest backup in a different local backup directory
-#    PS> .\Verify-Backup.ps1 -LocalDir "D:\DB_Backups"
+#    # Verify from a different folder
+#    PS> .\backups\verify-backup.ps1 -LocalDir "D:\DB_Backups"
 #
-#    # Verify latest backup using a different filename pattern
-#    PS> .\Verify-Backup.ps1 -Pattern "mydb_*.sql.gz"
+#    # Verify using a different filename pattern
+#    PS> .\backups\verify-backup.ps1 -Pattern "mydb_*.sql.gz"
 #
-#    # Verify latest backup + test gzip integrity
-#    PS> .\Verify-Backup.ps1 -TestGzip
+#    # Verify + gzip integrity test
+#    PS> .\backups\verify-backup.ps1 -TestGzip
 #
-#    # Verify ALL matching backups in the directory
-#    PS> .\Verify-Backup.ps1 -All
+#    # Verify all backups in the directory
+#    PS> .\backups\verify-backup.ps1 -All
 #
-#    # Verify ALL backups + gzip test
-#    PS> .\Verify-Backup.ps1 -All -TestGzip
+#    # Verify all + gzip test
+#    PS> .\backups\verify-backup.ps1 -All -TestGzip
 #
 #    # Example overall return codes (considering all processed files):
 #         0  = OK (all hashes matched; no gzip failures)

@@ -1,38 +1,38 @@
 # =====================================================================================================
-#  Get-Backup.ps1
-#  -----------------------------------------------------------------------------
-#  Downloads the most recent database backup (.sql.gz) from the VPS,
-#  stores it locally, writes a SHA-256 checksum, optionally extracts it using
-#  7-Zip, optionally performs a gzip integrity check, and prunes older local
-#  copies beyond a specified retention count.
+#  get-backup.ps1
+#  ---------------------------------------------------------------------------------------------
+#  Downloads the latest database backup (.sql.gz) from the VPS via SCP,
+#  stores it locally, writes a SHA-256 checksum, optionally extracts it
+#  via 7-Zip, optionally runs a gzip integrity check, and prunes old
+#  local backups according to -Keep <N>.
 #
 #  USAGE EXAMPLES:
 #
-#    # Basic download of latest backup
-#    PS> .\Get-Backup.ps1
+#    # Download latest backup
+#    PS> .\backups\get-backup.ps1
 #
-#    # Download + extract into the same folder
-#    PS> .\Get-Backup.ps1 -Extract
+#    # Download + extract
+#    PS> .\backups\get-backup.ps1 -Extract
 #
 #    # Download + test gzip integrity
-#    PS> .\Get-Backup.ps1 -TestGzip
+#    PS> .\backups\get-backup.ps1 -TestGzip
 #
-#    # Keep last 10 local backups, delete older ones
-#    PS> .\Get-Backup.ps1 -Keep 10
+#    # Keep last 10 backups
+#    PS> .\backups\get-backup.ps1 -Keep 10
 #
-#    # Download from a different server
-#    PS> .\Get-Backup.ps1 -Server "backup-prod" -Port 2222
+#    # Different server / port
+#    PS> .\backups\get-backup.ps1 -Server "backup-prod" -Port 2222
 #
-#    # Use custom local and remote paths
-#    PS> .\Get-Backup.ps1 -RemoteDir "/home/apna/backups/daily" `
-#                          -LocalDir "D:\DB_Backups"
+#    # Custom directories
+#    PS> .\backups\get-backup.ps1 -RemoteDir "/home/apna/backups/daily" `
+#                         -LocalDir "D:\DB_Backups"
 #
-#    # Combine features:
-#    PS> .\Get-Backup.ps1 -Extract -TestGzip -Keep 14
+#    # Combine features
+#    PS> .\backups\get-backup.ps1 -Extract -TestGzip -Keep 14
 #
 #  REQUIREMENTS:
-#     - SSH/SCP installed (Windows OpenSSH is fine)
-#     - For extraction: optional 7-Zip installed at:
+#      • ssh + scp installed (Windows OpenSSH works)
+#      • For extraction: 7-Zip at:
 #           C:\Program Files\7-Zip\7z.exe
 # =====================================================================================================
 
