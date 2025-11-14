@@ -1,4 +1,61 @@
-# logs\Get-Logs.ps1
+# =====================================================================================================
+#  Get-Logs.ps1
+#  -----------------------------------------------------------------------------
+#  Fetches or streams logs from the VPS:
+#
+#    • View recent logs via SSH (nginx, app, backup, journalctl)
+#    • Follow logs live (-Follow)
+#    • Filter which categories to show (-Kinds)
+#    • Download raw log files via SCP (-Download)
+#    • Include rotated logs (-IncludeRotated)
+#    • ZIP downloaded logs (-Zip)
+#    • Output everything to a transcript file (-OutFile)
+#
+#  SUPPORTED LOG GROUPS:
+#        Nginx     → nginx.error.log, nginx.access.log
+#        App       → errors.log, payment_system.log, sql.log
+#        Backup    → backup.log
+#        Journal   → systemd units: gunicorn_apnagold, nginx
+#        All       → everything above
+#
+#  USAGE EXAMPLES:
+#
+#    # Show the last 200 lines of all logs
+#    PS> .\Get-Logs.ps1
+#
+#    # Show only nginx logs
+#    PS> .\Get-Logs.ps1 -Kinds Nginx
+#
+#    # Show only app logs, last 50 lines
+#    PS> .\Get-Logs.ps1 -Kinds App -Tail 50
+#
+#    # Follow nginx error log live
+#    PS> .\Get-Logs.ps1 -Kinds Nginx -Follow
+#
+#    # View logs since a specific timestamp
+#    PS> .\Get-Logs.ps1 -Since "2025-11-13 10:00"
+#
+#    # Download current nginx+app logs to local folder
+#    PS> .\Get-Logs.ps1 -Download -Kinds Nginx,App
+#
+#    # Download all logs + rotated logs + zip
+#    PS> .\Get-Logs.ps1 -Download -IncludeRotated -Zip
+#
+#    # Download specific named files
+#    PS> .\Get-Logs.ps1 -Files "sql.log","nginx.error.log" -Download
+#
+#    # Download using remote server-side wildcard
+#    PS> .\Get-Logs.ps1 -RemoteGlobs "nginx*.gz" -Download
+#
+#    # Save all output (including live/SSH text) to a transcript
+#    PS> .\Get-Logs.ps1 -OutFile "C:\Work13\logs\session.txt"
+#
+#  NOTES:
+#    • Requires ssh/scp (Windows built-in OpenSSH works fine).
+#    • sudo journalctl will prompt once per run (cached thereafter).
+#    • Local and remote directories are fully configurable.
+# =====================================================================================================
+
 
 [CmdletBinding()]
 param(
