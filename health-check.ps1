@@ -150,15 +150,15 @@ function Invoke-RemoteSudo {
 # 1) Network Reachability
 Banner "1) Network Reachability"
 
-$ping = Test-Connection -ComputerName $Server -Count 1 -Quiet
+$ping = Test-Connection -ComputerName $Server -Count 1 -Quiet -ErrorAction SilentlyContinue
 Write-Host ("Ping: " + ($(if ($ping) { "OK" } else { "FAILED" }))) `
     -ForegroundColor ($(if ($ping) { "Green" } else { "Red" }))
 
-try {
-    Invoke-RemoteSsh "echo SSH_OK" | Out-Null
+$sshCheck = Invoke-RemoteSsh "echo SSH_OK" | Select-Object -First 1
+if ($sshCheck -match "SSH_OK") {
     Write-Host "SSH: OK" -ForegroundColor Green
-} catch {
-    Write-Host "SSH: FAILED ($($_.Exception.Message))" -ForegroundColor Red
+} else {
+    Write-Host "SSH: FAILED (see SSH output above)" -ForegroundColor Red
 }
 
 # 2) Services

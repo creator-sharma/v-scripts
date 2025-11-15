@@ -334,15 +334,14 @@ if ($Download) {
     if ($IncludeRotated) {
       $patterns = @()
 
-      # unified logic
       if ($wantAll -or $wantNginx) {
-        $patterns += "nginx*.log.1","nginx*.log.*.gz"
+        $patterns += "nginx*.log-*"
       }
       if ($wantAll -or $wantApp) {
-        $patterns += "errors.log.*","payment_system.log.*","sql.log.*"
+        $patterns += "errors.log-*","payment_system.log-*","sql.log-*"
       }
       if ($wantAll -or $wantBackup) {
-        $patterns += "backup.log.*"
+        $patterns += "backup.log-*"
       }
 
       foreach ($pat in $patterns | Select-Object -Unique) {
