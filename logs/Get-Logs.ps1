@@ -49,7 +49,7 @@
 #    PS> .\logs\get-logs.ps1 -RemoteGlobs "nginx*.gz" -Download
 #
 #    # Save full session transcript
-#    PS> .\logs\get-logs.ps1 -OutFile "C:\Work13\scripts\logs\run.txt"
+#    PS> .\logs\get-logs.ps1 -OutFile "C:\Work13\scripts\logs\run.log"
 #
 #  NOTES:
 #      • Requires ssh/scp (Windows OpenSSH is fine).
@@ -121,6 +121,66 @@ function Section([string]$title) {
 }
 
 # =============================================================
+# Simple log line colorizer (view mode only)
+#   - Colors by severity (ERROR/WARNING/INFO/CRITICAL/DEBUG)
+#   - Also colors by HTTP status code where present:
+#       5xx → Red
+#       4xx → Yellow
+#       2xx → Green (if no stronger severity color already)
+# =============================================================
+function Write-LogLineColored {
+  param(
+    [string]$Line
+  )
+
+  if ([string]::IsNullOrWhiteSpace($Line)) {
+    return
+  }
+
+  $color = $null
+
+  # ---- Severity-based coloring ----
+  if ($Line -match '\bCRITICAL\b|\bFATAL\b') {
+    $color = 'Red'
+  }
+  elseif ($Line -match '\bERROR\b') {
+    $color = 'Red'
+  }
+  elseif ($Line -match '\bWARNING\b|\bWARN\b') {
+    $color = 'Yellow'
+  }
+  elseif ($Line -match '\bDEBUG\b') {
+    $color = 'DarkGray'
+  }
+  elseif ($Line -match '\bINFO\b') {
+    $color = 'Green'
+  }
+
+  # ---- HTTP status-based coloring (nginx / gunicorn access-style lines) ----
+  # Looks for: "GET /something" 200 1234
+  if ($Line -match '\s"[^"]*"\s+(\d{3})\s+\d+') {
+    $status = [int]$matches[1]
+
+    if ($status -ge 500) {
+      $color = 'Red'
+    }
+    elseif ($status -ge 400) {
+      if (-not $color) { $color = 'Yellow' }
+    }
+    elseif ($status -ge 200 -and $status -lt 300) {
+      if (-not $color) { $color = 'Green' }
+    }
+  }
+
+  if ($color) {
+    Write-Host $Line -ForegroundColor $color
+  }
+  else {
+    Write-Host $Line
+  }
+}
+
+# =============================================================
 # Build SSH command safely
 # =============================================================
 function Invoke-SSH([string]$cmd) {
@@ -150,8 +210,15 @@ function Invoke-SSH([string]$cmd) {
 # SUDO wrapper — unified for journalctl or other commands
 #   - prompts once per run
 #   - reuses password for all sudo calls
+#   - optional -Colorize to run output through Write-LogLineColored
 # =============================================================
-function Invoke-Sudo([string]$cmd, [string]$title) {
+function Invoke-Sudo {
+  param(
+    [string]$cmd,
+    [string]$title,
+    [switch]$Colorize
+  )
+
   Section $title
 
   # Ask for password once per run
@@ -197,14 +264,20 @@ function Invoke-Sudo([string]$cmd, [string]$title) {
   if ($p.ExitCode -ne 0) {
     Write-Host "(sudo failed: $err)" -ForegroundColor Yellow
   } else {
-    Write-Host $out
+    if ($Colorize) {
+      $out -split "`n" | ForEach-Object { Write-LogLineColored $_ }
+    } else {
+      Write-Host $out
+    }
   }
 }
 
 # =============================================================
 # Unix path join
 # =============================================================
-function Join-Unix($a,$b) { return ($a.TrimEnd('/') + '/' + $b.TrimStart('/')) }
+function Join-Unix($a,$b) {
+  return ($a.TrimEnd('/') + '/' + $b.TrimStart('/'))
+}
 
 # =============================================================
 # What logs we want
@@ -264,6 +337,7 @@ if (-not $Download) {
     }
 
     if ($wantJournal) {
+      # live follow: stream raw output (no per-line color here)
       Invoke-Sudo "journalctl -u gunicorn_apnagold -f --no-pager $sinceArg" "LIVE: gunicorn"
       Invoke-Sudo "journalctl -u nginx -f --no-pager $sinceArg" "LIVE: nginx service"
     }
@@ -273,8 +347,13 @@ if (-not $Download) {
       foreach ($n in $nginxLogs) {
         $p = Join-Unix $RemoteLogDir $n
         Section "$n (last $Tail)"
-        try { Invoke-SSH "tail -n $Tail $p" | Write-Host }
-        catch { Write-Host "(missing: $n)" -ForegroundColor DarkYellow }
+        try {
+          $out = Invoke-SSH "tail -n $Tail $p"
+          $out -split "`n" | ForEach-Object { Write-LogLineColored $_ }
+        }
+        catch {
+          Write-Host "(missing: $n)" -ForegroundColor DarkYellow
+        }
       }
     }
 
@@ -282,21 +361,32 @@ if (-not $Download) {
       foreach ($n in $appLogs) {
         $p = Join-Unix $RemoteLogDir $n
         Section "$n (last $Tail)"
-        try { Invoke-SSH "tail -n $Tail $p" | Write-Host }
-        catch { Write-Host "(missing: $n)" -ForegroundColor DarkYellow }
+        try {
+          $out = Invoke-SSH "tail -n $Tail $p"
+          $out -split "`n" | ForEach-Object { Write-LogLineColored $_ }
+        }
+        catch {
+          Write-Host "(missing: $n)" -ForegroundColor DarkYellow
+        }
       }
     }
 
     if ($wantBackup) {
       $p = Join-Unix $RemoteLogDir "backup.log"
       Section "backup.log (last $Tail)"
-      try { Invoke-SSH "tail -n $Tail $p" | Write-Host }
-      catch { Write-Host "(missing backup.log)" -ForegroundColor DarkYellow }
+      try {
+        $out = Invoke-SSH "tail -n $Tail $p"
+        $out -split "`n" | ForEach-Object { Write-LogLineColored $_ }
+      }
+      catch {
+        Write-Host "(missing backup.log)" -ForegroundColor DarkYellow
+      }
     }
 
     if ($wantJournal) {
-      Invoke-Sudo "journalctl -u gunicorn_apnagold -n $Tail --no-pager $sinceArg" "gunicorn"
-      Invoke-Sudo "journalctl -u nginx -n $Tail --no-pager $sinceArg" "nginx"
+      # colorized journalctl output
+      Invoke-Sudo "journalctl -u gunicorn_apnagold -n $Tail --no-pager $sinceArg" "gunicorn" -Colorize
+      Invoke-Sudo "journalctl -u nginx -n $Tail --no-pager $sinceArg" "nginx" -Colorize
     }
   }
 }
