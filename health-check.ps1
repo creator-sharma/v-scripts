@@ -246,3 +246,7 @@ Write-Host $uptimePretty
 
 Write-Host ""
 Write-Host "=== Health Check Complete ===" -ForegroundColor Cyan
+
+# Clear sudo password from memory
+$script:SudoPasswordPlain = $null
+$script:SudoPasswordAsked = $false

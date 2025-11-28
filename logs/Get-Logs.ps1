@@ -376,4 +376,9 @@ if ($Download) {
 # Cleanup
 # =============================================================
 if ($OutFile) { Stop-Transcript | Out-Null }
+
+# Clear sudo password from memory
+$script:SudoPasswordPlain = $null
+$script:SudoPasswordAsked = $false
+
 exit 0

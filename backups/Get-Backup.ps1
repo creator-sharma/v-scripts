@@ -32,18 +32,30 @@
 #
 #  REQUIREMENTS:
 #      • ssh + scp installed (Windows OpenSSH works)
-#      • For extraction: 7-Zip at:
-#           C:\Program Files\7-Zip\7z.exe
+#      • For extraction: 7-Zip (default path configurable via -SevenZipPath)
 # =====================================================================================================
 
+[CmdletBinding()]
 param(
-    [string]$Server    = "apna-vps",
-    [string]$RemoteDir = "/home/apna/backups/daily",
-    [string]$LocalDir  = "C:\Work13\scripts\backups\output",
-    [int]$Port         = 22,
-    [int]$Keep         = 5,          # keep last N local .sql.gz files; set 0 to disable
-    [switch]$Extract,                # auto-extract with 7-Zip if available
-    [switch]$TestGzip                # quick gzip integrity probe after download
+    [string]$Server      = "apna-vps",
+    [string]$RemoteDir   = "/home/apna/backups/daily",
+    [string]$LocalDir    = "C:\Work13\scripts\backups\output",
+    [int]   $Port        = 22,
+
+    # keep last N local .sql.gz files; set 0 to disable pruning
+    [int]   $Keep        = 5,
+
+    # pattern for local pruning (defaults to your current naming)
+    [string]$PrunePattern = "apnagold_*.sql.gz",
+
+    # auto-extract with 7-Zip if available
+    [switch]$Extract,
+
+    # quick gzip integrity probe after download
+    [switch]$TestGzip,
+
+    # override 7-Zip path if needed
+    [string]$SevenZipPath = "C:\Program Files\7-Zip\7z.exe"
 )
 
 $ErrorActionPreference = "Stop"
@@ -53,6 +65,11 @@ Write-Host "Checking for latest backup on $Server ..." -ForegroundColor Cyan
 # Get latest file path on the server
 $sshCmd = "ls -1t $RemoteDir/*.sql.gz | head -n 1"
 $latest = & ssh -p $Port $Server $sshCmd 2>$null
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "ERROR: ssh command failed while listing backups." -ForegroundColor Red
+    exit 3
+}
 
 if (-not $latest) {
     Write-Host "No backup file found in $RemoteDir" -ForegroundColor Yellow
@@ -96,7 +113,10 @@ if ($TestGzip) {
     try {
         $fs = [System.IO.File]::OpenRead($localPath)
         try {
-            $gz  = New-Object System.IO.Compression.GZipStream($fs, [System.IO.Compression.CompressionMode]::Decompress)
+            $gz  = New-Object System.IO.Compression.GZipStream(
+                $fs,
+                [System.IO.Compression.CompressionMode]::Decompress
+            )
             $buf = New-Object byte[] 2048
             [void]$gz.Read($buf, 0, $buf.Length)
             Write-Host "Gzip quick-check: OK (stream opened & read)." -ForegroundColor Green
@@ -111,11 +131,10 @@ if ($TestGzip) {
 
 # Optional: extract with 7-Zip if requested
 if ($Extract) {
-    $sevenZip = "C:\Program Files\7-Zip\7z.exe"
-    if (Test-Path $sevenZip) {
+    if (Test-Path $SevenZipPath) {
         Write-Host "Extracting with 7-Zip..." -ForegroundColor Cyan
         # extract into LocalDir explicitly
-        & $sevenZip e $localPath "-o$LocalDir" -aoa | Out-Null
+        & $SevenZipPath e $localPath "-o$LocalDir" -aoa | Out-Null
         if ($LASTEXITCODE -eq 0) {
             $sqlName = ($filename -replace '\.gz$', '')
             Write-Host "Extracted -> $(Join-Path $LocalDir $sqlName)" -ForegroundColor Green
@@ -123,14 +142,13 @@ if ($Extract) {
             Write-Host "Extraction failed (7-Zip exit $LASTEXITCODE)" -ForegroundColor Red
         }
     } else {
-        Write-Host "7-Zip not found at '$sevenZip'. Skipping extraction." -ForegroundColor Yellow
+        Write-Host "7-Zip not found at '$SevenZipPath'. Skipping extraction." -ForegroundColor Yellow
     }
 }
 
 # Optional: prune old local .sql.gz files
 if ($Keep -gt 0) {
-    $pattern = "apnagold_*.sql.gz"
-    $files = Get-ChildItem -Path $LocalDir -Filter $pattern -ErrorAction SilentlyContinue |
+    $files = Get-ChildItem -Path $LocalDir -Filter $PrunePattern -ErrorAction SilentlyContinue |
              Sort-Object LastWriteTime -Descending
     if ($files.Count -gt $Keep) {
         $toDelete = $files | Select-Object -Skip $Keep

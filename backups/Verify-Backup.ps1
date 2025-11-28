@@ -44,6 +44,7 @@
 #    • local validation after download
 # =====================================================================================================
 
+[CmdletBinding()]
 param(
     [string]$LocalDir = "C:\Work13\scripts\backups\output",
     [string]$Pattern  = "apnagold_*.sql.gz",
@@ -154,4 +155,11 @@ if ($overallHadMismatch) {
 
 Write-Host ""
 Write-Host "Overall verification status: $finalStatus" -ForegroundColor Cyan
+switch ($finalStatus) {
+    0 { Write-Host "All backups OK." -ForegroundColor Green }
+    3 { Write-Host "OK, but some .sha256 were missing and were created." -ForegroundColor Yellow }
+    4 { Write-Host "ERROR: One or more hash mismatches!" -ForegroundColor Red }
+    5 { Write-Host "WARNING: Gzip integrity failed for one or more backups." -ForegroundColor Red }
+    6 { Write-Host "No backup files found." -ForegroundColor Yellow }
+}
 exit $finalStatus
