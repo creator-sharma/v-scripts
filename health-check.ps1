@@ -28,7 +28,8 @@
 ==================================================================================================== #>
 
 param(
-    [string]$Server = "apna-vps",
+    [string]$Server   = "apna-vps",
+    [string]$PingHost = "31.97.228.66",
     [int]$Port = 22,
     [switch]$VerboseOutput
 )
@@ -150,8 +151,8 @@ function Invoke-RemoteSudo {
 # 1) Network Reachability
 Banner "1) Network Reachability"
 
-$ping = Test-Connection -ComputerName $Server -Count 1 -Quiet -ErrorAction SilentlyContinue
-Write-Host ("Ping: " + ($(if ($ping) { "OK" } else { "FAILED" }))) `
+$ping = Test-Connection -ComputerName $PingHost -Count 1 -Quiet -ErrorAction SilentlyContinue
+Write-Host ("Ping ({0}): {1}" -f $PingHost, ($(if ($ping) { "OK" } else { "FAILED" }))) `
     -ForegroundColor ($(if ($ping) { "Green" } else { "Red" }))
 
 $sshCheck = Invoke-RemoteSsh "echo SSH_OK" | Select-Object -First 1
@@ -225,10 +226,14 @@ if ($latestBackup -and $latestBackup.Trim()) {
 # 9) TLS certificate expiry (sudo)
 Banner "9) TLS Certificate Expiry"
 
-$certInfoRaw = Invoke-RemoteSudo "openssl x509 -enddate -noout -in /etc/letsencrypt/live/apnagold.in/fullchain.pem"
-$certInfo    = $certInfoRaw | Select-Object -First 1
-$expiry      = $certInfo -replace "notAfter=", ""
-Write-Host "Certificate expires on: $expiry" -ForegroundColor Yellow
+$certInfoRaw = Invoke-RemoteSudo `
+    "openssl x509 -enddate -noout -in /etc/letsencrypt/live/apnagold.in/fullchain.pem"
+
+if ($null -ne $certInfoRaw -and $certInfoRaw.Trim()) {
+    $certInfo = $certInfoRaw | Select-Object -First 1
+    $expiry   = $certInfo -replace "notAfter=", ""
+    Write-Host "Certificate expires on: $expiry" -ForegroundColor Yellow
+}
 
 # 10) Firewall (sudo)
 Banner "10) Firewall Status (UFW)"
@@ -236,7 +241,8 @@ Invoke-RemoteSudo "ufw status numbered"
 
 # 11) System uptime
 Banner "11) System Uptime"
-Invoke-RemoteSsh "uptime -p"
+$uptimePretty = Invoke-RemoteSsh "uptime -p" | Select-Object -First 1
+Write-Host $uptimePretty
 
 Write-Host ""
 Write-Host "=== Health Check Complete ===" -ForegroundColor Cyan
